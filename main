@@ -1,0 +1,223 @@
+import random
+from random import randint
+import discord
+from discord.ext import commands
+import math
+import time
+import asyncio
+import os
+from keep_alive import keep_alive
+
+bossinfo = {
+#Dragonlord
+    "hemody": 0.1,
+
+    "155": 50,
+    "160": 60,
+    "165": 70,
+    "170": 78,
+    "180": 86,
+    #exalted dragonlord
+    "185": 70,
+    "190": 80,
+    "195": 90,
+    "200": 100,
+    "205": 110,
+    "210": 120,
+    "215": 130,
+    "prot": 480,
+    "west": 240,"north": 240,"center": 240,"south": 240
+    
+}
+
+bosstimers = {
+    #Dragonlord
+  "hemody": 1,
+
+    "155": 0,
+    "160": 0,
+    "165": 0,
+    "170": 0,
+    "180": 0,
+    #exalted dragonlord
+    "185": 0,
+    "190": 0,
+    "195": 0,
+    "200": 0,
+    "205": 0,
+    "210": 0,
+    "215": 0,
+    "prot": 0,
+    "west": 0,"north": 0,"center": 0,"south": 0
+}
+
+timerRunning = {
+    #Dragonlord
+  "hemody": False,
+
+    "155": False,
+    "160": False,
+    "165": False,
+    "170": False,
+    "180": False,
+    #exalted dragonlord
+    "185": False,
+    "190": False,
+    "195": False,
+    "200": False,
+    "205": False,
+    "210": False,
+    "215": False,
+    "prot": False,
+    "west": False,"north": False,"center": False,"south": False
+  
+}
+
+TOKEN = os.getenv('TOKEN')
+
+bot = commands.Bot(command_prefix='!')
+
+
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user}.')
+
+@bot.event
+
+
+async def on_command_error(ctx, error):
+    await ctx.message.delete(delay=3)
+    response = await ctx.channel.send('>>> Oh oh! An Error occured o_o\n Did you maybe forget to enter the bossname?')
+    await response.delete(delay=6)
+    return
+
+@bot.command(name='info')
+async def getInfo(ctx):
+    message = '>>> **Available commands:**\n'
+    message += '```diff\n'
+    message += '+ !names           - lists the names of all available bosses\n'
+    message += '+ !status          - lists all active timers\n'
+    message += '+ !start <name>     - starts timer for a certain boss\n'
+    message += '+ !end <name>      - ends the timer for a certain boss\n'
+    message += '+ !restart <name>  - restarts timer for a certain boss\n'
+    message += '```'
+    await ctx.message.delete(delay=3)
+    response = await ctx.channel.send(message)
+    await response.delete(delay=6)
+    return
+
+@bot.command(name='status')
+async def getStatus(ctx):
+    status = '>>> **Active timers:**\n'
+    for key, value in bosstimers.items():
+        if value > 0:
+            status += f'```ini\n[{key:<20}{printTime(value)}]\n```'
+    await ctx.message.delete(delay=3)
+    response = await ctx.channel.send(status)
+    await response.delete(delay=10)
+    
+    return
+
+@bot.command(name='names')
+async def getNames(ctx):
+    names = '>>> **Available bosses:**\n'
+    names += '```diff\n'
+    for key, value in bosstimers.items():
+            names += f'- {key}\n'
+    names += '```'
+    await ctx.message.delete(delay=3)
+    response = await ctx.channel.send(names)
+    await response.delete(delay=20)
+    return
+
+@bot.command(name='restart')
+async def restartTimer(ctx, name):
+    name = name.strip().lower()
+    if name not in bosstimers.keys():
+        await ctx.message.delete(delay=3)
+        response = await ctx.channel.send(f'> {name} is not a valid boss name. Type "!names" to list all valid names.')
+        await response.delete(delay=6)
+        return
+    if not timerRunning[name]:
+      await startTimer(ctx, name)
+      return
+    bosstimers[name] = float(bossinfo[name] * 60000)
+    await ctx.message.delete(delay=3)
+    response = await ctx.channel.send(f'>>> :alarm_clock: The timer for {name} has been restarted.\n```ini\n[{name:<20}{printTime(bosstimers[name])}]\n```')
+    await response.delete(delay=6)
+    return
+
+@bot.command(name='end')
+async def endTimer(ctx, name):
+    name = name.strip().lower()
+
+    if name not in bosstimers.keys():
+        await ctx.message.delete(delay=3)
+        response = await ctx.channel.send(f'> {name} is not a valid boss name. Type "!start names" to list all valid names.')
+        await response.delete(delay=6)
+        return
+
+    bosstimers[name] = -10000000
+    await ctx.message.delete(delay=3)
+    response = await ctx.channel.send(f'> Timer for {name} was terminated manually.')
+    await response.delete(delay=6)
+    return
+
+@bot.command(name='start')
+
+async def startTimer(ctx, name):
+  
+    name = name.strip().lower()
+    
+    if name not in bosstimers.keys():
+        await ctx.message.delete(delay=3)
+        response = await ctx.channel.send(f'> {name} is not a valid boss name. Type "!names" to list all valid names.')
+        await response.delete(delay=6)
+        return
+
+    if timerRunning[name]:
+        await ctx.message.delete(delay=3)
+        response = await ctx.channel.send(f'>>> :alarm_clock: Timer is already running.\n```ini\n[{name:<20}{printTime(bosstimers[name])}]\n```')
+        await response.delete(delay=6)
+        return
+    
+    timerRunning[name] = True
+    bosstimers[name] = float(bossinfo[name] * 60000)
+    timestamp = time.time() * 1000
+    await ctx.message.delete(delay=3)
+    
+    response = await ctx.channel.send(f'>>> :alarm_clock: Timer started succesfully.\n```ini\n[{name:<20}{printTime(bosstimers[name])}]\n```')
+    await response.delete(delay=6)
+
+    while bosstimers[name] > 0:
+        await asyncio.sleep(1)
+        bosstimers[name] -= time.time() * 1000 - timestamp
+        timestamp = time.time() * 1000
+
+    if bosstimers[name] > -10000000:
+    
+      #channel = bot.get_channel(1002452555130998845)
+      response = await ctx.channel.send( f'**{name} is due!**'.upper())
+      
+      await response.delete(delay=8000)
+      timerRunning[name] = False
+    return
+
+#async def ping(ctx, name):
+  #channel= bot.get_channel(1001303816760725564)
+  #await channel.send(f'**{name} is due in 5!**'.upper())
+
+
+def printTime(millis):
+        hours = math.floor(millis / 3600000)
+        minutes = math.floor((millis % 3600000) / 60000)
+        seconds = math.floor((millis % 60000) / 1000)
+        return '{0:02d}:{1:02d}:{2:02d}'.format(hours, minutes, seconds)
+
+
+
+keep_alive()
+
+
+
+bot.run(TOKEN)
